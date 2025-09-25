@@ -1,12 +1,12 @@
 from PIL import Image
 import trimesh
 import numpy as np
-
-#characters = "$@%&#*/\\|()\{\}[]?-_+~<>!;:,\"^`'. "
-#kaikki = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1\{\}[]?-_+~<>i!lI;:,\"^`'. "
+import sys
 
 
-def muunnakuva(data, characters="@%#*+=-:. "):
+#----------------------2d image into ascii art-------------------------------------------------------
+
+def muunnakuva(img, characters="@%#*+=-:. "):
     w, h = img.size
 
     pixels = list(img.getdata())
@@ -31,8 +31,10 @@ def muunna_yksi_merkki(pixelvalue, merkit):
         index -= 1
     return merkit[index]
 
+#----------------------3d model into ascii art--------------------------------------------------------
 
-# muuta obj mesh objektiksi
+
+# Transform .obj into mesh object.
 def obj_to_mesh(objfile):
     mesh = trimesh.load(objfile)
     #jos on useita objecteja tehdään scene.
@@ -44,6 +46,7 @@ def obj_to_mesh(objfile):
     return mesh
 
 
+# Reduce quality of model.
 def simplify(mesh, target_faces=5000):
     #simplified.export("cat_simplified.obj")
     return mesh.simplify_quadric_decimation(face_count=target_faces)
@@ -73,23 +76,18 @@ def rotation_matrix_z(theta):
     ])
 
 
-# käännä mallia x astetta
-def rotate(vert, angle, axis='z'):
-    rotationmatrix=None
+# Rotate model n degrees to any direction.
+def rotate(vert, angle):
+    angle = np.asarray(angle)
     angle = np.deg2rad(angle)
-    if axis == 'x':
-        rotationmatrix = rotation_matrix_x(angle)
-    elif axis == 'y':
-        rotationmatrix = rotation_matrix_y(angle)
-    elif axis == 'z':
-        rotationmatrix = rotation_matrix_z(angle)
-    
-    if rotationmatrix is None:
-        return vert
+    m_x = rotation_matrix_x(angle[0])
+    m_y = rotation_matrix_y(angle[1])
+    m_z = rotation_matrix_z(angle[2])
+    rotationmatrix = m_x @ m_y @ m_z
     return vert @ rotationmatrix.T
 
 
-# laske normaalivektorit faceille.
+# Calculate normalized normal vectors for every face.
 def face_normal_vectors(vertices, faces):
     vertices = np.asarray(vertices)
     faces = np.asarray(faces)
@@ -107,7 +105,7 @@ def face_normal_vectors(vertices, faces):
     return normalvectors
 
 
-# lasketaan miten kirkas kukin kohta pinnasta on.
+# Calculate how bright each face is to the camera.
 def face_brightnesses(normals, light_vector=[0, 0, 1]):
     normals = np.asarray(normals)
     light_vector = np.asarray(light_vector)
@@ -116,7 +114,7 @@ def face_brightnesses(normals, light_vector=[0, 0, 1]):
     return brightness_values
 
 
-# määrittää mikä printataan ja minne. TODO:tätä on muokattava
+# Determines what faces will be shown on screen. TODO:tätä on muokattava
 def determine_printed_vertices(face_projection, screen_height=100, screen_width=120):
     depth_buffer = np.full((screen_height, screen_width), None, dtype=object)
     for v in face_projection:
@@ -128,11 +126,7 @@ def determine_printed_vertices(face_projection, screen_height=100, screen_width=
     return depth_buffer
 
 
-def determine_ascii_char(brightness):
-    return muunna_yksi_merkki(int(round(brightness*255)), " .:-=+*#%@")
-
-
-def determine_ascii_char2(brightnesses):
+def determine_ascii_char(brightnesses):
     characters = np.array(list(" .:-=+*#%@"))
     vali = 255 / len(characters)
     indexes = np.round(np.round(brightnesses*255) / vali).astype(int)
@@ -141,7 +135,7 @@ def determine_ascii_char2(brightnesses):
     return asciiarr
 
 
-# laskee keskipisteen kullekin facelle. pitänee jättää syvyys pois???
+# Calculates center point for each face.
 def face_centers(faces, projections):
     faces = np.asarray(faces)
     projections = np.asarray(projections)
@@ -154,11 +148,11 @@ def face_centers(faces, projections):
     return centers
 
 
-# tehdään tupleja, jossa toisena osana paikkavektori, ja toisena osana piirrettävä merkki.
+# Creates tuples from face center vectors and face textures (characters).
 def join_character_to_coordinates(face_centers, brightness):
     face_centers = np.asarray(face_centers)
     brightness = np.asarray(brightness)
-    characters = determine_ascii_char2(brightness)
+    characters = determine_ascii_char(brightness)
 
     character_and_center = []
     for v, c in zip(face_centers, characters):
@@ -166,44 +160,66 @@ def join_character_to_coordinates(face_centers, brightness):
     return character_and_center
 
 
+# Replaces none values from depthbuffer with ' '
 def remove_Nones(db):
     for row in range(len(db)):
         for col in range(len(db[row])):
             if db[row][col] == None:
                 db[row][col] = (0, ' ')
 
+
 #TODO: koita clearausta siirtämällä cursori alkuun tai ansi escape koodi
-
 #TODO: Kokeile jossain vaihees laskea facejen keskipisteet ja normaalivektorit vaan kerran, ja sit suorittaa kääntäminen niille. 
-
-#img = Image.open("donitsi.jpg").convert("L")
-#muunnos = muunnakuva(img)
-#for rivi in muunnos:
-#    print("".join(rivi))
+#TODO: Tee daemon thread jonka avulla ensin voidaan kääntää paikallaan oleva kuva oikein päin ja sit alottaa mallin pyörittäminen.
+#TODO: Tee myös mahdollisuus siirtää mallia edestakaisin nuolista. esim: näppäin M asettaa liikutustilan jolloin nuolet liikuttaa kuvaa,
+#       R asettaa rotate tilaan, jolloin käännetään nuolen suuntaan kuvaa. D asettaa sitten display tilaan, jolloin malli alkaa pyöriä.
 def main():
-    mesh = obj_to_mesh("cat_simplified.obj")
-    mesh.vertices = rotate(mesh.vertices, -90, axis='y')
-    angle=0
+
+    MAXIUM_FACES = 10000
+    THRESHOLD_PERCENTAGE = 0.8
+
+    arguments = sys.argv[1:]
+    model_file = arguments[0]
+
+    mesh = obj_to_mesh(model_file)
+
+    previous = len(mesh.faces)
+    while len(mesh.faces) > MAXIUM_FACES:
+        mesh = simplify(mesh)
+        if(len(mesh.faces) > previous*THRESHOLD_PERCENTAGE and len(mesh.faces) > MAXIUM_FACES):
+            print("Model is too detailed for ascii graphics!")
+            return
+        previous = len(mesh.faces)
+
+    mesh.vertices = rotate(mesh.vertices, [0, -90, 0])
+
+    angle=[0,0,0]
     while True:
-        angle = 2
-        mesh.vertices = rotate(mesh.vertices, angle, axis='x')
-    
+        angle = [5, 0, 0]
+        #angle = [5, 1, 2]
+        mesh.vertices = rotate(mesh.vertices, angle)
+
         normals = face_normal_vectors(mesh.vertices, mesh.faces)
-    
+
         bri = face_brightnesses(normals)
-    
+
         chc = face_centers(mesh.faces, mesh.vertices)
-    
+
         jj = join_character_to_coordinates(chc, bri)
-    
+
         depthbuffer = determine_printed_vertices(jj)
-    
+
         remove_Nones(depthbuffer)
-    
+
         print("\033c", end="")
-        
+
         for rivi in depthbuffer:
             print("".join(str(cell[1]) for cell in rivi))
 
 if __name__ == "__main__":
     main()
+
+#img = Image.open("donitsi.jpg").convert("L")
+#muunnos = muunnakuva(img)
+#for rivi in muunnos:
+#    print("".join(rivi))
