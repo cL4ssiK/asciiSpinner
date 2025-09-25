@@ -1,7 +1,7 @@
 from PIL import Image
 import trimesh
 import numpy as np
-import os
+import math
 
 #characters = "$@%&#*/\\|()\{\}[]?-_+~<>!;:,\"^`'. "
 #kaikki = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1\{\}[]?-_+~<>i!lI;:,\"^`'. "
@@ -72,6 +72,7 @@ def rotation_matrix_z(theta):
 # käännä mallia x astetta
 def rotate(vert, angle, axis='z'):
     rotationmatrix=None
+    angle = np.deg2rad(angle)
     if axis == 'x':
         rotationmatrix = rotation_matrix_x(angle)
     elif axis == 'y':
@@ -116,7 +117,7 @@ def face_brightnesses(normals, light_vector=[0, 0, 1]):
 
 
 # määrittää mikä printataan ja minne. TODO:tätä on muokattava
-def determine_printed_vertices(face_projection, screen_height=100, screen_width=180):
+def determine_printed_vertices(face_projection, screen_height=100, screen_width=120):
     depth_buffer = np.full((screen_height, screen_width), None, dtype=object)
     for v in face_projection:
         int_x = int(screen_width/2) + int(round(v[0][0]))
@@ -154,6 +155,52 @@ def remove_Nones(db):
             if db[row][col] == None:
                 db[row][col] = (0, ' ')
 
+#TODO: koita clearausta siirtämällä cursori alkuun tai ansi escape koodi
+#TODO: joku ongelma tossa kääntämisessä. selvitä.
+
+#img = Image.open("donitsi.jpg").convert("L")
+#muunnos = muunnakuva(img)
+#for rivi in muunnos:
+#    print("".join(rivi))
+
+mesh = obj_to_mesh("cat_simplified.obj")
+mesh.vertices = rotate(mesh.vertices, -90, axis='y')
+angle=0
+while True:
+    angle = 5
+    mesh.vertices = rotate(mesh.vertices, angle, axis='x')
+    #print("vertices: ", len(mesh.vertices))
+    #print("faces: ", len(mesh.faces))
+    normals = face_normal_vectors(mesh.vertices, mesh.faces)
+    #print("normals: ", len(normals))
+    bri = np.array(face_brightnesses(normals))
+    #print("brightnesses: ", len(bri))
+    proj = projection_3D_to_2D(mesh.vertices)
+    #print("proj. vertices: ", len(proj))
+    chc = character_coordinates(mesh.faces, proj)
+    #print("proj. face centers: ", len(chc))
+    jj = join_character_to_coordinates(chc, bri)
+    depthbuffer = determine_printed_vertices(jj)
+    remove_Nones(depthbuffer)
+    #os.system('cls' if os.name == 'nt' else 'clear')
+    print("\033c", end="")
+    for rivi in depthbuffer:
+        #print("".join(str(cell[1]) if cell is not None else " " for cell in rivi))
+        print("".join(str(cell[1]) for cell in rivi))
+
+
+#rotated = rotate(mesh.vertices, angle)
+
+#vertice formaatti: [x, y, z]
+
+
+
+#simplified = mesh.simplify_quadric_decimation(face_count=5000)
+#print("Simplified vertices:", len(simplified.vertices))
+#print("Simplified faces:", len(simplified.faces))
+#
+#simplified.export("cat_simplified.obj")
+
 '''
 eli. koska jokainen face sisältää indeksit alkuperäiseen vertice taulukkoon minkä vektorien kautta face piirretään,
 pysyvät nämä pisteet samoina myös muunnoksessa. Eli siis uuden taulukon samoista indekseistä löytyy uudet vektorit,
@@ -169,42 +216,3 @@ kysymysmerkkejä:
     - merkki on iso, täten pieni pinta saattaa suurentua liikaa 
     - miten päällekäisyys ratkaistaan ylipäänsä.
 '''
-#img = Image.open("donitsi.jpg").convert("L")
-#muunnos = muunnakuva(img)
-#for rivi in muunnos:
-#    print("".join(rivi))
-mesh = obj_to_mesh("cat_simplified.obj")
-mesh.vertices = rotate(mesh.vertices, -90, axis='y')
-angle=0
-while True:
-    angle = angle + 10
-    mesh.vertices = rotate(mesh.vertices, angle, axis='x')
-    #print("vertices: ", len(mesh.vertices))
-    #print("faces: ", len(mesh.faces))
-    normals = face_normal_vectors(mesh.vertices, mesh.faces)
-    #print("normals: ", len(normals))
-    bri = np.array(face_brightnesses(normals))
-    #print("brightnesses: ", len(bri))
-    proj = projection_3D_to_2D(mesh.vertices)
-    #print("proj. vertices: ", len(proj))
-    chc = character_coordinates(mesh.faces, proj)
-    #print("proj. face centers: ", len(chc))
-    jj = join_character_to_coordinates(chc, bri)
-    depthbuffer = determine_printed_vertices(jj)
-    remove_Nones(depthbuffer)
-    os.system('cls' if os.name == 'nt' else 'clear')
-    for rivi in depthbuffer:
-        print("".join(str(cell[1]) if cell is not None else " " for cell in rivi))
-
-
-#rotated = rotate(mesh.vertices, angle)
-
-#vertice formaatti: [x, y, z]
-
-
-
-#simplified = mesh.simplify_quadric_decimation(face_count=5000)
-#print("Simplified vertices:", len(simplified.vertices))
-#print("Simplified faces:", len(simplified.faces))
-#
-#simplified.export("cat_simplified.obj")
