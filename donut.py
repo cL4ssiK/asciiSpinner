@@ -44,6 +44,11 @@ def obj_to_mesh(objfile):
     return mesh
 
 
+def simplify(mesh, target_faces=5000):
+    #simplified.export("cat_simplified.obj")
+    return mesh.simplify_quadric_decimation(face_count=target_faces)
+
+
 def rotation_matrix_x(theta):
     return np.array([
         [1, 0, 0],
@@ -168,7 +173,6 @@ def remove_Nones(db):
                 db[row][col] = (0, ' ')
 
 #TODO: koita clearausta siirtämällä cursori alkuun tai ansi escape koodi
-#TODO: joku ongelma tossa kääntämisessä. selvitä.
 
 #TODO: Kokeile jossain vaihees laskea facejen keskipisteet ja normaalivektorit vaan kerran, ja sit suorittaa kääntäminen niille. 
 
@@ -176,56 +180,30 @@ def remove_Nones(db):
 #muunnos = muunnakuva(img)
 #for rivi in muunnos:
 #    print("".join(rivi))
+def main():
+    mesh = obj_to_mesh("cat_simplified.obj")
+    mesh.vertices = rotate(mesh.vertices, -90, axis='y')
+    angle=0
+    while True:
+        angle = 2
+        mesh.vertices = rotate(mesh.vertices, angle, axis='x')
+    
+        normals = face_normal_vectors(mesh.vertices, mesh.faces)
+    
+        bri = face_brightnesses(normals)
+    
+        chc = face_centers(mesh.faces, mesh.vertices)
+    
+        jj = join_character_to_coordinates(chc, bri)
+    
+        depthbuffer = determine_printed_vertices(jj)
+    
+        remove_Nones(depthbuffer)
+    
+        print("\033c", end="")
+        
+        for rivi in depthbuffer:
+            print("".join(str(cell[1]) for cell in rivi))
 
-mesh = obj_to_mesh("cat_simplified.obj")
-mesh.vertices = rotate(mesh.vertices, -90, axis='y')
-angle=0
-while True:
-    angle = 5
-    mesh.vertices = rotate(mesh.vertices, angle, axis='x')
-    #print("vertices: ", len(mesh.vertices))
-    #print("faces: ", len(mesh.faces))
-    normals = face_normal_vectors(mesh.vertices, mesh.faces)
-    #print("normals: ", len(normals))
-    bri = face_brightnesses(normals)
-    #print("brightnesses: ", len(bri))
-    #chc = character_coordinates(mesh.faces, mesh.vertices)
-    chc = face_centers(mesh.faces, mesh.vertices)
-    #print("proj. face centers: ", len(chc))
-    jj = join_character_to_coordinates(chc, bri)
-    depthbuffer = determine_printed_vertices(jj)
-    remove_Nones(depthbuffer)
-    #os.system('cls' if os.name == 'nt' else 'clear')
-    print("\033c", end="")
-    for rivi in depthbuffer:
-        #print("".join(str(cell[1]) if cell is not None else " " for cell in rivi))
-        print("".join(str(cell[1]) for cell in rivi))
-
-
-#rotated = rotate(mesh.vertices, angle)
-
-#vertice formaatti: [x, y, z]
-
-
-
-#simplified = mesh.simplify_quadric_decimation(face_count=5000)
-#print("Simplified vertices:", len(simplified.vertices))
-#print("Simplified faces:", len(simplified.faces))
-#
-#simplified.export("cat_simplified.obj")
-
-'''
-eli. koska jokainen face sisältää indeksit alkuperäiseen vertice taulukkoon minkä vektorien kautta face piirretään,
-pysyvät nämä pisteet samoina myös muunnoksessa. Eli siis uuden taulukon samoista indekseistä löytyy uudet vektorit,
-joiden läpi face nyt piirretään.
-Nyt koska haluamme piirtää nämä facet, otamme aina facea vastaavat verticet uudesta taulukosta, ja laskemme facen 
-keskipisteen. Haluamme piirtää merkin tähän pisteeseen. Kuitenkin päällekäin tulevia pisteitä syntyy useita, joten 
-huomioitava on vain lähimpänä oleva piste.
-Täytynee myös hieman skaalata keskipisteiden koordinaatteja, sillä muuten kuvasta tulisi mega ahdas.
-
-kysymysmerkkejä:
-    - muodostuuko ongelma, sillä facet eivät välttämättä ole kokonaan päällekäin, vaan tulee selvittää ovatko osittain 
-        päällekäin.
-    - merkki on iso, täten pieni pinta saattaa suurentua liikaa 
-    - miten päällekäisyys ratkaistaan ylipäänsä.
-'''
+if __name__ == "__main__":
+    main()
