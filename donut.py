@@ -1,7 +1,6 @@
 from PIL import Image
 import trimesh
 import numpy as np
-import math
 
 #characters = "$@%&#*/\\|()\{\}[]?-_+~<>!;:,\"^`'. "
 #kaikki = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1\{\}[]?-_+~<>i!lI;:,\"^`'. "
@@ -85,35 +84,31 @@ def rotate(vert, angle, axis='z'):
     return vert @ rotationmatrix.T
 
 
-#3d malli -> 2d kuva + syvyys TODO: muokkaa siten että syvyys ei kuulu vektoriin suoraan.
-def projection_3D_to_2D(vertices):
-    projection = []
-    for v in vertices:
-        projection.append(np.array([v[0], v[1], v[2]]))
-    return projection
-
-
 # laske normaalivektorit faceille.
 def face_normal_vectors(vertices, faces):
-    normalvectors = []
-    for f in faces:
-        vectors = [np.array(vertices[f[0]]), 
-                   np.array(vertices[f[1]]), 
-                   np.array(vertices[f[2]])]
-        
-        edges = [vectors[1]-vectors[0], vectors[2]-vectors[0]]
-        normalvector = np.cross(edges[0], edges[1])
-        normalized_for_direction = normalvector/np.linalg.norm(normalvector)
-        normalvectors.append(normalized_for_direction)
+    vertices = np.asarray(vertices)
+    faces = np.asarray(faces)
+
+    v0 = vertices[faces[:, 0]]
+    v1 = vertices[faces[:, 1]]
+    v2 = vertices[faces[:, 2]]
+
+    e1 = v1 - v0
+    e2 = v2 - v0
+
+    normalvectors = np.cross(e1, e2)
+    normalized_length = np.linalg.norm(normalvectors, axis=1, keepdims=True)
+    normalvectors /= normalized_length
     return normalvectors
 
 
 # lasketaan miten kirkas kukin kohta pinnasta on.
 def face_brightnesses(normals, light_vector=[0, 0, 1]):
-    face_brightness = []
-    for v in normals:
-        face_brightness.append(max(0, np.dot(v, light_vector)))
-    return face_brightness
+    normals = np.asarray(normals)
+    light_vector = np.asarray(light_vector)
+
+    brightness_values = np.maximum(0, np.dot(normals, light_vector))
+    return brightness_values
 
 
 # määrittää mikä printataan ja minne. TODO:tätä on muokattava
@@ -132,21 +127,38 @@ def determine_ascii_char(brightness):
     return muunna_yksi_merkki(int(round(brightness*255)), " .:-=+*#%@")
 
 
+def determine_ascii_char2(brightnesses):
+    characters = np.array(list(" .:-=+*#%@"))
+    vali = 255 / len(characters)
+    indexes = np.round(np.round(brightnesses*255) / vali).astype(int)
+    indexes = np.where(indexes > 0, indexes - 1, 0)
+    asciiarr = characters[indexes]
+    return asciiarr
+
+
 # laskee keskipisteen kullekin facelle. pitänee jättää syvyys pois???
-def character_coordinates(faces, projections):
-    char_pos = []
-    for f in faces:
-        center = (projections[f[0]] + projections[f[1]] + projections[f[2]])/3
-        char_pos.append(center)
-    return char_pos
+def face_centers(faces, projections):
+    faces = np.asarray(faces)
+    projections = np.asarray(projections)
+
+    v0 = projections[faces[:, 0]]
+    v1 = projections[faces[:, 1]]
+    v2 = projections[faces[:, 2]]
+
+    centers = (v0 + v1 + v2)/3
+    return centers
 
 
 # tehdään tupleja, jossa toisena osana paikkavektori, ja toisena osana piirrettävä merkki.
 def join_character_to_coordinates(face_centers, brightness):
-    tuplet = []
-    for v, b in zip(face_centers, brightness):
-        tuplet.append((v, determine_ascii_char(b)))
-    return tuplet
+    face_centers = np.asarray(face_centers)
+    brightness = np.asarray(brightness)
+    characters = determine_ascii_char2(brightness)
+
+    character_and_center = []
+    for v, c in zip(face_centers, characters):
+        character_and_center.append((v, c))
+    return character_and_center
 
 
 def remove_Nones(db):
@@ -157,6 +169,8 @@ def remove_Nones(db):
 
 #TODO: koita clearausta siirtämällä cursori alkuun tai ansi escape koodi
 #TODO: joku ongelma tossa kääntämisessä. selvitä.
+
+#TODO: Kokeile jossain vaihees laskea facejen keskipisteet ja normaalivektorit vaan kerran, ja sit suorittaa kääntäminen niille. 
 
 #img = Image.open("donitsi.jpg").convert("L")
 #muunnos = muunnakuva(img)
@@ -173,11 +187,10 @@ while True:
     #print("faces: ", len(mesh.faces))
     normals = face_normal_vectors(mesh.vertices, mesh.faces)
     #print("normals: ", len(normals))
-    bri = np.array(face_brightnesses(normals))
+    bri = face_brightnesses(normals)
     #print("brightnesses: ", len(bri))
-    proj = projection_3D_to_2D(mesh.vertices)
-    #print("proj. vertices: ", len(proj))
-    chc = character_coordinates(mesh.faces, proj)
+    #chc = character_coordinates(mesh.faces, mesh.vertices)
+    chc = face_centers(mesh.faces, mesh.vertices)
     #print("proj. face centers: ", len(chc))
     jj = join_character_to_coordinates(chc, bri)
     depthbuffer = determine_printed_vertices(jj)
