@@ -1,12 +1,12 @@
 from PIL import Image
 import trimesh
 import numpy as np
+import os
 
 #characters = "$@%&#*/\\|()\{\}[]?-_+~<>!;:,\"^`'. "
 #kaikki = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1\{\}[]?-_+~<>i!lI;:,\"^`'. "
 
 
-        
 def muunnakuva(data, characters="@%#*+=-:. "):
     w, h = img.size
 
@@ -52,6 +52,7 @@ def rotation_matrix_x(theta):
         [0, np.sin(theta),  np.cos(theta)]
     ])
 
+
 def rotation_matrix_y(theta):
     return np.array([
         [ np.cos(theta), 0, np.sin(theta)],
@@ -59,12 +60,14 @@ def rotation_matrix_y(theta):
         [-np.sin(theta), 0, np.cos(theta)]
     ])
 
+
 def rotation_matrix_z(theta):
     return np.array([
         [np.cos(theta), -np.sin(theta), 0],
         [np.sin(theta),  np.cos(theta), 0],
         [0, 0, 1]
     ])
+
 
 # käännä mallia x astetta
 def rotate(vert, angle, axis='z'):
@@ -80,11 +83,12 @@ def rotate(vert, angle, axis='z'):
         return vert
     return vert @ rotationmatrix.T
 
+
 #3d malli -> 2d kuva + syvyys TODO: muokkaa siten että syvyys ei kuulu vektoriin suoraan.
 def projection_3D_to_2D(vertices):
     projection = []
     for v in vertices:
-        projection.append(np.array([v[0]/v[2], v[1]/v[2], v[2]]))
+        projection.append(np.array([v[0], v[1], v[2]]))
     return projection
 
 
@@ -112,13 +116,13 @@ def face_brightnesses(normals, light_vector=[0, 0, 1]):
 
 
 # määrittää mikä printataan ja minne. TODO:tätä on muokattava
-def determine_printed_vertices(face_projection, screen_height=100, screen_width=150):
-    depth_buffer = np.full((screen_height, screen_width), np.inf)
+def determine_printed_vertices(face_projection, screen_height=100, screen_width=180):
+    depth_buffer = np.full((screen_height, screen_width), None, dtype=object)
     for v in face_projection:
-        int_x = int(round(v[0]))
-        int_y = int(round(v[1]))
-        if depth_buffer[int_x][int_y] is np.inf or (depth_buffer[int_x][int_y])[2] < v[2]:
-            depth_buffer[int_x][int_y] = v
+        int_x = int(screen_width/2) + int(round(v[0][0]))
+        int_y = int(screen_height/2) + int(round(v[0][1]))
+        if depth_buffer[int_x][int_y] == None or (depth_buffer[int_x][int_y])[0] < v[0][2]:
+            depth_buffer[int_x][int_y] = (v[0][2], v[1])
     
     return depth_buffer
 
@@ -137,11 +141,19 @@ def character_coordinates(faces, projections):
 
 
 # tehdään tupleja, jossa toisena osana paikkavektori, ja toisena osana piirrettävä merkki.
-def join_character_to_coordinates(char_pos, brightness):
+def join_character_to_coordinates(face_centers, brightness):
     tuplet = []
-    for v, b in zip(char_pos, brightness):
+    for v, b in zip(face_centers, brightness):
         tuplet.append((v, determine_ascii_char(b)))
     return tuplet
+
+
+def remove_Nones(db):
+    for row in range(len(db)):
+        for col in range(len(db[row])):
+            if db[row][col] == None:
+                db[row][col] = (0, ' ')
+
 '''
 eli. koska jokainen face sisältää indeksit alkuperäiseen vertice taulukkoon minkä vektorien kautta face piirretään,
 pysyvät nämä pisteet samoina myös muunnoksessa. Eli siis uuden taulukon samoista indekseistä löytyy uudet vektorit,
@@ -162,23 +174,29 @@ kysymysmerkkejä:
 #for rivi in muunnos:
 #    print("".join(rivi))
 mesh = obj_to_mesh("cat_simplified.obj")
-angle  = 0
-print("vertices: ", len(mesh.vertices))
-print("faces: ", len(mesh.faces))
-normals = face_normal_vectors(mesh.vertices, mesh.faces)
-print("normals: ", len(normals))
-bri = np.array(face_brightnesses(normals))
-print("brightnesses: ", len(bri))
-proj = projection_3D_to_2D(mesh.vertices)
-print("proj. vertices: ", len(proj))
-chc = character_coordinates(mesh.faces, proj)
-print("proj. face centers: ", len(chc))
-print(chc[:10])
-print(bri[:20])
-t=[]
-for b in bri[:20]:
-    t.append(determine_ascii_char(b))
-print(t)
+mesh.vertices = rotate(mesh.vertices, -90, axis='y')
+angle=0
+while True:
+    angle = angle + 10
+    mesh.vertices = rotate(mesh.vertices, angle, axis='x')
+    #print("vertices: ", len(mesh.vertices))
+    #print("faces: ", len(mesh.faces))
+    normals = face_normal_vectors(mesh.vertices, mesh.faces)
+    #print("normals: ", len(normals))
+    bri = np.array(face_brightnesses(normals))
+    #print("brightnesses: ", len(bri))
+    proj = projection_3D_to_2D(mesh.vertices)
+    #print("proj. vertices: ", len(proj))
+    chc = character_coordinates(mesh.faces, proj)
+    #print("proj. face centers: ", len(chc))
+    jj = join_character_to_coordinates(chc, bri)
+    depthbuffer = determine_printed_vertices(jj)
+    remove_Nones(depthbuffer)
+    os.system('cls' if os.name == 'nt' else 'clear')
+    for rivi in depthbuffer:
+        print("".join(str(cell[1]) if cell is not None else " " for cell in rivi))
+
+
 #rotated = rotate(mesh.vertices, angle)
 
 #vertice formaatti: [x, y, z]
