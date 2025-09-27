@@ -2,7 +2,9 @@ from PIL import Image
 import trimesh
 import numpy as np
 import sys
-
+import colorama
+from scipy.spatial import ConvexHull
+import math
 
 #----------------------2d image into ascii art-------------------------------------------------------
 
@@ -115,11 +117,11 @@ def face_brightnesses(normals, light_vector=[0, 0, 1]):
 
 
 # Determines what faces will be shown on screen. TODO:tätä on muokattava
-def determine_printed_vertices(face_projection, screen_height=100, screen_width=120):
+def determine_printed_vertices(face_projection, screen_height=110, screen_width=120):
     depth_buffer = np.full((screen_height, screen_width), None, dtype=object)
     for v in face_projection:
-        int_x = int(screen_width/2) + int(round(v[0][0]))
-        int_y = int(screen_height/2) + int(round(v[0][1]))
+        int_y = int(screen_width/2) + int(round(v[0][1]))
+        int_x = int(screen_height/2) + int(round(v[0][0]))
         if depth_buffer[int_x][int_y] == None or (depth_buffer[int_x][int_y])[0] < v[0][2]:
             depth_buffer[int_x][int_y] = (v[0][2], v[1])
     
@@ -168,6 +170,67 @@ def remove_Nones(db):
                 db[row][col] = (0, ' ')
 
 
+'''
+Moves the vertices for x, y, z amount. 
+We need to expand the matrix into fourth dimension temporarily to acheive the move with multiplication.
+'''
+def move(vertices, x, y, z):
+    ones = np.ones((vertices.shape[0], 1))
+    vertices_h = np.hstack([vertices, ones])
+    T = np.array([
+    [1, 0, 0, x],
+    [0, 1, 0, y],
+    [0, 0, 1, z],
+    [0, 0, 0, 1]
+    ])
+    moved_vertices_h = vertices_h @ T.T  # (N, 4)
+    moved_vertices = moved_vertices_h[:, :3]
+    return moved_vertices
+
+
+def size_of_model(vertices):
+    # Build convex hull
+    hull = ConvexHull(vertices)
+    hull_points = vertices[hull.vertices]
+
+    # Brute-force only on hull vertices
+    max_dist = 0
+    for i in range(len(hull_points)):
+        dists = np.linalg.norm(hull_points[i] - hull_points, axis=1)
+        j = np.argmax(dists)
+        if dists[j] > max_dist:
+            max_dist = dists[j]
+
+    return max_dist
+
+'''
+Calculates center point of the model from maxium and minium coordinates for each axis.
+Bounds box around the model, calculates space diagonal vector and halves it.
+'''
+def model_center_point(opposite_corners):
+    return (opposite_corners[0] + opposite_corners[1]) / 2
+
+
+def model_furthest_points(vertices):
+    mins = np.min(vertices, axis=0)
+    maxs = np.max(vertices, axis=0)
+    return np.vstack([mins, maxs])
+
+'''
+Now only for x axis direction spinning.
+TODO: make this universal.
+'''
+def determine_buffer_size(model_dimensions_xyz):
+    #TODO: Keksi miten tää tehään. Jotenkin täytyy selvittää missä suunnassa tarvitaan mitenkin paljon tilaa.
+    #       koska se minkä akselien suhteen pyöritetään vaikuttaa suurimpaan leveyteen ja korkeuteen, 
+    #       täytyy pyörimiskulma huomioida laskussa. 
+    # Periaatteessa muodostetaan ympyrät pyörimisakselien ympärille. esim jos pyörii y,x ympäri suhteessa
+    #   5:1 pyörähtää kappale alkuasennossaan kokonaan kummankin akselin ympäri. Täten tarvitaan tilaa korkeus-
+    #   jokin ratkaisu on ottaa maksimi niiden akselien mukaisista dimensioista, joiden suuntaan ei pyöritä. muuten vain sen akselin mitta
+    width = max(int(math.ceil(model_dimensions_xyz[1])), int(math.ceil(model_dimensions_xyz[2])))
+    height = int(math.ceil(model_dimensions_xyz[0]))
+    return width, height
+
 #TODO: koita clearausta siirtämällä cursori alkuun tai ansi escape koodi
 #TODO: Kokeile jossain vaihees laskea facejen keskipisteet ja normaalivektorit vaan kerran, ja sit suorittaa kääntäminen niille. 
 #TODO: Tee daemon thread jonka avulla ensin voidaan kääntää paikallaan oleva kuva oikein päin ja sit alottaa mallin pyörittäminen.
@@ -178,8 +241,10 @@ def main():
     MAXIUM_FACES = 10000
     THRESHOLD_PERCENTAGE = 0.8
 
+    #colorama.init()
+
     arguments = sys.argv[1:]
-    model_file = arguments[0]
+    model_file = "cat_simplified.obj"#arguments[0]
 
     mesh = obj_to_mesh(model_file)
 
@@ -191,12 +256,31 @@ def main():
             return
         previous = len(mesh.faces)
 
+    #size = size_of_model(mesh.vertices)
+    #size_int = int(math.ceil(size))
+    fps = model_furthest_points(mesh.vertices)
+    center_point  = model_center_point(fps)
+
+    # Rotate to right orientation.
     mesh.vertices = rotate(mesh.vertices, [0, -90, 0])
 
-    angle=[0,0,0]
+    #mesh.vertices = move(mesh.vertices, -20, 0, 0)
+
+    fps = model_furthest_points(mesh.vertices)
+    center_point  = model_center_point(fps)
+    dimensions_xyz = np.abs(fps[0] - fps[1])
+    buffer_w, buffer_h = determine_buffer_size(dimensions_xyz)
+
+    mesh.vertices = move(mesh.vertices, -center_point[0], -center_point[1], -center_point[2])
+    #center_point2 = model_center_point(model_furthest_points(mesh.vertices))
+    angle = [5, 0, 0]
+    #angle = [5, 1, 2]
+    mesh.vertices = rotate(mesh.vertices, angle)
+
+    #TODO: tee funktio joka muodostaa aina framen. sitten mieti pitäisikö bufferin koko laskea face centereistä.
+
     while True:
-        angle = [5, 0, 0]
-        #angle = [5, 1, 2]
+        
         mesh.vertices = rotate(mesh.vertices, angle)
 
         normals = face_normal_vectors(mesh.vertices, mesh.faces)
@@ -207,11 +291,15 @@ def main():
 
         jj = join_character_to_coordinates(chc, bri)
 
-        depthbuffer = determine_printed_vertices(jj)
+        depthbuffer = determine_printed_vertices(jj, buffer_h+4, buffer_w+4)
 
         remove_Nones(depthbuffer)
 
         print("\033c", end="")
+        #n = len(depthbuffer) # this could work on some terminals.
+        #sys.stdout.write(f"\033[{n+1}A")
+        #sys.stdout.write("\033[H")
+        #sys.stdout.flush()
 
         for rivi in depthbuffer:
             print("".join(str(cell[1]) for cell in rivi))
