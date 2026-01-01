@@ -43,7 +43,7 @@ Run the setup script only if environment changes.
 ### 1. Activate virtual environment
 In project root run the following:
 ```bash
-.venv/bin/activate
+.venv\Scripts\activate
 ```
 ### 2. Move to src folder
 ```bash
