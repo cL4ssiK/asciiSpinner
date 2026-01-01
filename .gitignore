@@ -1,3 +1,6 @@
 *.jpeg
 *.png
 *.obj
+*.jpg
+
+coloramatest.py
