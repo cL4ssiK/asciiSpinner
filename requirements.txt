@@ -1,4 +1,4 @@
-trimesh
-numpy
-scipy
-fast-simplification
+trimesh==4.10.1
+numpy==2.2.6
+scipy==1.15.3
+fast-simplification==0.1.13
