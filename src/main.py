@@ -250,7 +250,7 @@ def main():
 
     arguments = sys.argv[1:]
     #model_file = "cat_simplified.obj"#arguments[0]
-    model_file = "../assets/cat.obj"#arguments[0]
+    model_file = f"../assets/{arguments[0]}"
 
     mesh = obj_to_mesh(model_file)
 
