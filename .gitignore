@@ -2,7 +2,7 @@
 *.png
 *.obj
 !cat.obj
-!hoerse.obj
+!horse.obj
 *.jpg
 
 coloramatest.py
