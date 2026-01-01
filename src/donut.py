@@ -1,10 +1,9 @@
-#from PIL import Image
 import trimesh
 import numpy as np
 import sys
-#import colorama
 from scipy.spatial import ConvexHull
 import math
+import time
 
 #----------------------2d image into ascii art-------------------------------------------------------
 
@@ -241,10 +240,17 @@ def main():
     MAXIUM_FACES = 10000
     THRESHOLD_PERCENTAGE = 0.8
 
+    ROTATION_SPEED = 90  # degrees per second
+    MAX_FRAMES = 30
+    frame_time = 1/MAX_FRAMES
+
+    BASE_ANGLE = np.array([1, 0, 0])
+
     #colorama.init()
 
     arguments = sys.argv[1:]
-    model_file = "cat_simplified.obj"#arguments[0]
+    #model_file = "cat_simplified.obj"#arguments[0]
+    model_file = "../assets/cat.obj"#arguments[0]
 
     mesh = obj_to_mesh(model_file)
 
@@ -256,15 +262,12 @@ def main():
             return
         previous = len(mesh.faces)
 
-    #size = size_of_model(mesh.vertices)
-    #size_int = int(math.ceil(size))
+
     fps = model_furthest_points(mesh.vertices)
     center_point  = model_center_point(fps)
 
     # Rotate to right orientation.
     mesh.vertices = rotate(mesh.vertices, [0, -90, 0])
-
-    #mesh.vertices = move(mesh.vertices, -20, 0, 0)
 
     fps = model_furthest_points(mesh.vertices)
     center_point  = model_center_point(fps)
@@ -272,15 +275,18 @@ def main():
     buffer_w, buffer_h = determine_buffer_size(dimensions_xyz)
 
     mesh.vertices = move(mesh.vertices, -center_point[0], -center_point[1], -center_point[2])
-    #center_point2 = model_center_point(model_furthest_points(mesh.vertices))
-    angle = [5, 0, 0]
-    #angle = [5, 1, 2]
-    mesh.vertices = rotate(mesh.vertices, angle)
+    
+    last_time = time.time()
 
     #TODO: tee funktio joka muodostaa aina framen. sitten mieti pitäisikö bufferin koko laskea face centereistä.
 
     while True:
-        
+        now = time.time()      
+        dt = now - last_time
+        last_time = now
+
+        angle = BASE_ANGLE * ROTATION_SPEED * dt
+
         mesh.vertices = rotate(mesh.vertices, angle)
 
         normals = face_normal_vectors(mesh.vertices, mesh.faces)
@@ -296,13 +302,19 @@ def main():
         remove_Nones(depthbuffer)
 
         print("\033c", end="")
-        #n = len(depthbuffer) # this could work on some terminals.
+        # this could work on some terminals.
+        #n = len(depthbuffer)
         #sys.stdout.write(f"\033[{n+1}A")
         #sys.stdout.write("\033[H")
         #sys.stdout.flush()
 
         for rivi in depthbuffer:
             print("".join(str(cell[1]) for cell in rivi))
+        
+        elapsed = time.time() - now
+        sleep_time = frame_time - elapsed
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
 if __name__ == "__main__":
     main()
