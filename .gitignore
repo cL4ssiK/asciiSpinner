@@ -4,3 +4,6 @@
 *.jpg
 
 coloramatest.py
+
+/.venv
+/.vscode
