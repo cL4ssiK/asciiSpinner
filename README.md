@@ -16,7 +16,7 @@ Reason why setup requires pyenv is the model simplification property. It contain
 ### 0. Install pyenv
 For windows install [pyenv-win](https://github.com/pyenv-win/pyenv-win?tab=readme-ov-file#installation).
 
-I installed via pip since i had python on my system already and it worked fine.
+I installed via pip since I had python on my system already and it worked fine.
 
 Linux and mac-os support official pyenv. Instructions coming...
 
@@ -69,7 +69,7 @@ deactivate
 ## Models
 Like said in description, the program can operate only with .obj format models. Other criteria is face amount and size of the model. I recommend to keep the face amount under 20k so the program can render it.
 
-I added two models that I tested my self as default, [cat.obj](https://free3d.com/3d-model/cat-v1--522281.html) and [horse.obj](https://free3d.com/3d-model/american-paint-horse-nuetral-v1--575385.html). They can be found from assets folder by default. These models are published in [Free3D](https://free3d.com/) and they are made by printable_models.
+I added two models that I tested myself as default, [cat.obj](https://free3d.com/3d-model/cat-v1--522281.html) and [horse.obj](https://free3d.com/3d-model/american-paint-horse-nuetral-v1--575385.html). They can be found from assets folder by default. These models are published in [Free3D](https://free3d.com/) and they are made by printable_models.
 
 If you wish to add your own 3D models, just make sure it is located in assets folder that can be found in project root.
 
