@@ -1,6 +1,8 @@
 *.jpeg
 *.png
 *.obj
+!cat.obj
+!hoerse.obj
 *.jpg
 
 coloramatest.py
