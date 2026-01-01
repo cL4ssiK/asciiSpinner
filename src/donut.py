@@ -1,8 +1,8 @@
-from PIL import Image
+#from PIL import Image
 import trimesh
 import numpy as np
 import sys
-import colorama
+#import colorama
 from scipy.spatial import ConvexHull
 import math
 
