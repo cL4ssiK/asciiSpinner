@@ -1,3 +1,4 @@
 trimesh
 numpy
 scipy
+fast-simplification
