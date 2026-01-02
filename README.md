@@ -10,6 +10,10 @@ One more issue is the starting position of the model. Currently program scales t
 
 Motivation for this project was video of 3D ascii donut from internet. Friend of mine sort of challenged me to implement it. I realized that spinning 3D model is basic linear algebra, so i decided to test my math knowledge in practice. And what is cooler than spinning ascii donut? Well... Spinning ascii "anything" :D
 
+### Demo
+Clicking the image redirects to my Youtube channel for short demonstration of the program.
+[![Ascii horse in CMD](https://img.youtube.com/vi/LXEHIBD2sNw/0.jpg)](https://youtu.be/LXEHIBD2sNw)
+
 ## Setup (first time)
 Reason why setup requires pyenv is the model simplification property. It contains dependency written in C++ and it does not play well with python versions more recent than 3.11.x.
 
